@@ -27,7 +27,7 @@ def runCreateStations(outputDir):
 # into the drf_gauge_station table. 
 def runIngestStations(inputDir, ingestDir):
     # Create list of program commands
-    program_list = [['python','ingestTasks.py','--inputDir',inputDir,'--ingestDir',ingestDir,'--inputTask','IngestStation']]
+    program_list = [['python','ingestTasks.py','--inputDir',inputDir,'--ingestDir',ingestDir]]
 
     # Run list of program commands using subprocess
     for program in program_list:
@@ -79,7 +79,7 @@ def main(args):
         logger.info('Ran create station data.')
     elif inputTask.lower() == 'ingeststations':
         logger.info('Run ingest station data.')
-        runIngestStation(inputDir, ingestDir)
+        runIngestStations(inputDir, ingestDir)
         logger.info('Ran ingest station data.')
     else:
         sys.exit('Incorrect inputTask')
