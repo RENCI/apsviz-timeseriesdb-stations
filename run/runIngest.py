@@ -90,7 +90,7 @@ if __name__ == "__main__":
     parser.add_argument("--inputDIR", "--inputDir", help="Input directory path", action="store", dest="inputDir", required=False)
     parser.add_argument("--outputDIR", "--outputDir", help="output directory path", action="store", dest="outputDir", required=False)
     parser.add_argument("--ingestDIR", "--ingestDir", help="Ingest directory path", action="store", dest="ingestDir", required=False)
-    parser.add_argument("--inputTask", help="Input task to be done", action="store", dest="inputTask", choices=['CreateStation','IngestStations'], required=True)
+    parser.add_argument("--inputTask", help="Input task to be done", action="store", dest="inputTask", choices=['CreateStations','IngestStations'], required=True)
 
     # Parse arguments
     args = parser.parse_args()

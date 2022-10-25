@@ -1,11 +1,11 @@
-# apsviz-timeseriesdb-ingest 
-The software, in this repo, is used to ingest gauge data from NOAA, NCEM, NDBC, and ADICIRC. To begin ingesting data, you first need to install the apsviz-timeseriesdb repo which can bet downloaded from:  
+# apsviz-timeseriesdb-stations 
+The software, in this repo, is used to ingest gauge station data from NOAA, NCEM, NDBC, and ADICIRC. To begin ingesting station data, you first need to install the apsviz-timeseriesdb repo which can bet downloaded from:  
 
 https://github.com/RENCI/apsviz-timeseriesdb  
 
 Follow the installation instructions for that repo. It creates and postgesql database, that serves data using a Django Rest Framework (DRF) app. 
 
-The gauge data that is being ingested cans currently be accessed from the apsviz-timeseriesdb.edc.renci.org VM in the following directory:   
+The gauge data that is being ingested can currently be accessed from the apsviz-timeseriesdb.edc.renci.org VM in the following directory:   
 
 /projects/ees/TDS/DataHarvesting/DAILY_HARVESTING/ 
 
@@ -13,21 +13,21 @@ It was generated using the software in the ADCIRC Support Tools (AST) repo, whic
 
 https://github.com/RENCI/AST
 
-## Install apsviz-timeseriesdb-ingest
+## Install apsviz-timeseriesdb-stations
 
-To install apsviz-timeseriesdb-ingest you first need to clone it:
+To install apsviz-timeseriesdb-stations you first need to clone it:
 
-git clone https://github.com/RENCI/apsviz-timeseriesdb-ingest.git
+git clone https://github.com/RENCI/apsviz-timeseriesdb-stations.git
 
 Next edit the run/env file adding a password to the line:
 
 SQL_PASSWORD=xxxxxx
 
-where you change xxxxxx to your password.
+where you change xxxxxx to the password that is used to access the database in apsviz-timeseriesdb.
 
-Then change your directory to apsviz-timeseriesdb-ingest/build:
+Then change your directory to apsviz-timeseriesdb-stations/build:
 
-cd apsviz-timeseriesdb-ingest/build
+cd apsviz-timeseriesdb-stations/build
 
 From this directory you can run the build.sh file as follows:
 
@@ -65,6 +65,14 @@ To ingest the original stations data change your directory to:
 
 cd original_gauge_ingest
 
+Create a file named .env.db in this directory, with the following information:
+
+POSTGRES_USER=apsviz_gauges
+POSTGRES_PASSWORD=xxxxxx
+POSTGRES_DB=apsviz_gauges
+
+where you change xxxxxx to the password that is used to access the database in apsviz-timeseriesdb.
+
 Then copy the CSV files to container:
 
 ./docker_cp_csv.sh
@@ -97,13 +105,15 @@ on the apsviz-timeseriesdb.edc.renci.org VM, to the same location that you added
 
 ### Create and Ingest Station Data 
 
-To ingest the station data, first make sure you have already ingested the original station data, as describe in the README.md for apsviz-timeseriesdb:
+To ingest the station data, first make sure you have already ingested the original station data, as describe above in this README.md. You also need to have installed the apsviz-timeseriesdb repo:
 
 https://github.com/RENCI/apsviz-timeseriesdb
 
-The run the command in the run directory:
+To create the station meta data that will be ingested into the drf_gauge_station table, in the apsviz-timeseriesdb database, run the following command in the /home/nru directory:
 
-python runIngest.py --inputTask Station
+python runIngest.py --outputDir /data/DataIngesting/DAILY_INGEST --inputTask CreateStations
 
-This will create Station data files in /data/DataIngesting/DAILY_INGEST and then ingest them into the drf_gauge_station table in the database.
+This will create Station data files in /data/DataIngesting/DAILY_INGEST. The next step is to ingest them into the drf_gauge_station table in the apsviz-timeseriesdb database. To do this run the following command in the /home/nru directory:
+
+python runIngest.py --inputDIR /data/DataIngesting/DAILY_INGEST --ingestDir /home/DataIngesting/DAILY_INGEST --inputTask IngestStations
 
