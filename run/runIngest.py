@@ -4,6 +4,7 @@
 # import modules
 import os
 import sys
+import argparse
 import subprocess
 from loguru import logger
 
@@ -36,7 +37,7 @@ def runIngestStations(inputDir, ingestDir):
 
 # Main program function takes args as input, which contains the inputDir, outputDir, ingestDir, and inputTask values.
 @logger.catch
-def main():
+def main(args):
     # Add logger
     logger.remove()
     log_path = os.path.join(os.getenv('LOG_PATH', os.path.join(os.path.dirname(__file__), 'logs')), '')
@@ -44,6 +45,8 @@ def main():
     logger.add(sys.stdout, level="DEBUG")
     logger.add(sys.stderr, level="ERROR")
 
+    # Get input task
+    inputTask = args.inputTask
    
     # Check if inputDir argument exist. This argument is used in runIngestStations. 
     if args.inputDir is None:
@@ -72,7 +75,7 @@ def main():
     # Check if inputTask, and run specified task 
     if inputTask.lower() == 'createstations':
         logger.info('Run create station data.')
-        runCreateStation(outputDir)
+        runCreateStations(outputDir)
         logger.info('Ran create station data.')
     elif inputTask.lower() == 'ingeststations':
         logger.info('Run ingest station data.')
