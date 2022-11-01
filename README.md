@@ -1,3 +1,11 @@
+<!--
+SPDX-FileCopyrightText: 2022 Renaissance Computing Institute. All rights reserved.
+
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-License-Identifier: LicenseRef-RENCI
+SPDX-License-Identifier: MIT
+-->
+
 # apsviz-timeseriesdb-stations 
 The software, in this repo, is used to ingest gauge station data from NOAA, NCEM, NDBC, and ADICIRC. To begin ingesting station data, you first need to install the apsviz-timeseriesdb repo which can bet downloaded from:  
 
