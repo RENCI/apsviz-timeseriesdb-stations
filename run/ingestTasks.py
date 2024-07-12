@@ -13,82 +13,162 @@ import argparse
 import glob
 import os
 import sys
-import psycopg2
+import psycopg
 import pandas as pd
 from pathlib import Path
-from dotenv import load_dotenv
 from loguru import logger
 
-load_dotenv()
-
-# This function takes an input directory and an ingest directory as input. The input directory is used to search for geom 
-# station files that are to be ingested. The ingest directory is used to define the path of the file to be ingested. The 
-# ingest directory is the directory path in the apsviz-timeseriesdb database container.
-def ingestStation(inputDir, ingestDir):
+def ingestStations(ingestDir):
+    ''' This function takes as input an ingest directory. The input directory is used to search for geom stations files
+        that are to be ingested. The ingest directory is used to define the path of the file to be ingested. The
+        ingest directory is the directory path in the apsviz-timeseriesdb database container. 
+        Parameters
+            ingestDir: string
+                Directory path to ingest data files, created from the harvest files. 
+        Returns 
+            None
+    '''         
+            
     # Create list of geom files, to be ingested by searching the input directory for geom files.
-    inputFiles = glob.glob(inputDir+"geom_*.csv")
+    inputFiles = glob.glob(ingestDir+"stations/geom_*.csv")
+            
+    # Define the ingest path and file using the ingest directory and the geom file name
 
-    # Loop thru geom file list, ingesting each one 
-    for geomFile in inputFiles:
-        # Define the ingest path and file using the ingest directory and the geom file name
-        ingestPathFile = ingestDir+Path(geomFile).parts[-1]
- 
-        try:
-            # Create connection to database and get cursor
-            conn = psycopg2.connect(dbname=os.environ['SQL_DATABASE'], user=os.environ['SQL_USER'], host=os.environ['SQL_HOST'], port=os.environ['SQL_PORT'], password=os.environ['SQL_PASSWORD'])
+    try:
+        # Create connection to database, set autocommit, and get cursor
+        with psycopg.connect(dbname=os.environ['APSVIZ_GAUGES_DB_DATABASE'],
+                             user=os.environ['APSVIZ_GAUGES_DB_USERNAME'],
+                             host=os.environ['APSVIZ_GAUGES_DB_HOST'],
+                             port=os.environ['APSVIZ_GAUGES_DB_PORT'],
+                             password=os.environ['APSVIZ_GAUGES_DB_PASSWORD'],
+                             autocommit=True) as conn:
             cur = conn.cursor()
 
-            # Set enviromnent
-            cur.execute("""SET CLIENT_ENCODING TO UTF8""")
-            cur.execute("""SET STANDARD_CONFORMING_STRINGS TO ON""")
-            cur.execute("""BEGIN""")
+            # Loop thru geom file list, ingesting each one
+            for geomFile in inputFiles:
+                # Run query
+                with open(geomFile, "r") as f:
+                    with cur.copy("COPY drf_gauge_station (station_name,lat,lon,tz,gauge_owner,location_name,location_type,country,state,county,geom) FROM STDIN WITH (FORMAT CSV)") as copy:
+                        while data := f.read(100):
+                            copy.write(data)
 
-            # Run query
-            cur.execute("""COPY drf_gauge_station(station_name,lat,lon,tz,gauge_owner,location_name,location_type,country,state,county,geom)
-                           FROM %(ingest_path_file)s
-                           DELIMITER ','
-                           CSV HEADER""",
-                        {'ingest_path_file': ingestPathFile})
-
-            # Commit ingest
-            conn.commit()
- 
             # Close cursor and database connection
             cur.close()
             conn.close()
 
-        # If exception log error
-        except (Exception, psycopg2.DatabaseError) as error:
-            logger.info(error)
+    # If exception log error
+    except (Exception, psycopg.DatabaseError) as error:
+        logger.exception(error)
 
+def ingestSourceData(ingestDir):
+    ''' This function takes as input an ingest directory. It uses the input directory to search for source CSV files, that where
+        created by the createIngestObsSourceMeta.py program. It uses the ingest directory to define the path of the file that is to
+        be ingested. The ingest directory is the directory path in the apsviz-timeseriesdb database container.
+        Parameters
+            ingestDir: string
+                Directory path to ingest data files, created from the harvest files.
+        Returns 
+            None
+    '''         
+            
+    # Create list of source files, to be ingested by searching the input directory for source files.
+    inputFiles = glob.glob(ingestDir+"source_*.csv")
+            
+    try:
+        # Create connection to database, set autocommit, and get cursor
+        with psycopg.connect(dbname=os.environ['APSVIZ_GAUGES_DB_DATABASE'],
+                             user=os.environ['APSVIZ_GAUGES_DB_USERNAME'], 
+                             host=os.environ['APSVIZ_GAUGES_DB_HOST'], 
+                             port=os.environ['APSVIZ_GAUGES_DB_PORT'],
+                             password=os.environ['APSVIZ_GAUGES_DB_PASSWORD'],
+                             autocommit=True) as conn:
+            cur = conn.cursor()
 
-# Main program function takes args as input, which contains the inputDir, ingestDir, inputTask, inputDataSource, inputSourceName, and inputSourceArchive values.
+            # Loop thru source file list, ingesting each one
+            for sourceFile in inputFiles:
+                # Run ingest query
+                with open(sourceFile, "r") as f:
+                    with cur.copy("COPY drf_gauge_source (station_id,data_source,source_name,source_archive,units) FROM STDIN WITH (FORMAT CSV)") as copy:
+                        while data := f.read(100):
+                            copy.write(data)
+
+                # Remove source data file after ingesting it.
+                logger.info('Remove source data file: '+sourceFile+' after ingesting it')
+                os.remove(sourceFile)
+
+            # Close cursor and database connection
+            cur.close()
+            conn.close()
+
+    # If exception log error
+    except (Exception, psycopg.DatabaseError) as error:
+        logger.exception(error)
+
+# Main program function takes args as input, which contains the inputDir, inputTask, inputDataSource, inputSourceName, and inputSourceArchive values.
 @logger.catch
 def main(args):
+    ''' Main program function takes args as input, starts logger, and runs specified task.
+        Parameters
+            args: dictionary
+                contains the parameters listed below.
+            inputTask: string
+                The type of task (ingestSourceMeta, ingestStations, ingestSourceData, ingestHarvestDataFileMeta, ingestData, createObsView. createModelView ) 
+                to be perfomed. The type of inputTask can change what other types of inputs ingestTask.py requires. Below is a list of all inputs, with associated tasks.
+            ingestDir: string
+                Directory path to ingest data files, created from the harvest files. Used by ingestStations, ingestSourceData,
+                ingestHarvestDataFileMeta, and ingestData.
+        Returns
+            None
+    '''
+
     # Add logger
     logger.remove()
     log_path = os.path.join(os.getenv('LOG_PATH', os.path.join(os.path.dirname(__file__), 'logs')), '')
-    logger.add(log_path+'ingestTasks.log', level='DEBUG')
+    logger.add(log_path+'ingestObsTasks.log', level='DEBUG')
     logger.add(sys.stdout, level="DEBUG")
     logger.add(sys.stderr, level="ERROR")
 
-    # Extract args variables
-    inputDir = os.path.join(args.inputDir, '')
+    inputTask = args.inputTask
 
-    ingestDir = os.path.join(args.ingestDir, '')
+    # Check if inputTask if file, station, source, data or view, and run appropriate function
+    if inputTask.lower() == 'ingeststations':
+        ingestDir = os.path.join(args.ingestDir, '')
+        logger.info('Ingesting station data.')
+        ingestStations(ingestDir)
+        logger.info('Ingested station data.')
+    elif inputTask.lower() == 'ingestsourcedata':
+        ingestDir = os.path.join(args.ingestDir, '')
+        logger.info('Ingesting source data.')
+        ingestSourceData(ingestDir)
+        logger.info('ingested source data.')
 
-    logger.info('Create station data.')
-    ingestStation(inputDir, ingestDir)
-    logger.info('Created station data.')
-
-# Run main function takes inputDir, ingestDir, inputTask, inputDataSource, inputSourceName, and inputSourceArchive as input.
+# Run main function takes inputDir, inputTask, inputDataSource, inputSourceName, and inputSourceArchive as input.
 if __name__ == "__main__":
-    """ This is executed when run from the command line """
+    ''' Takes argparse inputs and passes theme to the main function
+        Parameters
+            inputTask: string
+                The type of task (ingestSourceMeta, ingestStations, ingestSourceData, ingestHarvestDataFileMeta, ingestData, 
+                createObsView, createModelView ) to be perfomed. The type of inputTask can change what other types of inputs
+                ingestTask.py requires. Below is a list of all inputs, with associated tasks.
+            ingestDir: string
+                Directory path to ingest data files, created from the harvest files. Used by ingestStations, ingestSourceData,
+                ingestHarvestDataFileMeta, and ingestData.
+        Returns
+            None
+    '''         
+
+    # parse input arguments
     parser = argparse.ArgumentParser()
 
     # Optional argument which requires a parameter (eg. -d test)
-    parser.add_argument("--inputDIR", "--inputDir", help="Input directory path", action="store", dest="inputDir", required=True)
-    parser.add_argument("--ingestDIR", "--ingestDir", help="Ingest directory path", action="store", dest="ingestDir", required=True)
+    parser.add_argument("--inputTask", help="Input task to be done", action="store", dest="inputTask", choices=['ingestStations','ingestSourceData'], required=True)
+
+    # get runScript argument to use in if statement
+    args = parser.parse_known_args()[0]
+    if args.inputTask.lower() == 'ingeststations':
+        parser.add_argument("--ingestDIR", "--ingestDir", help="Ingest directory path", action="store", dest="ingestDir", required=True)
+    elif args.inputTask.lower() == 'ingestsourcedata':
+        parser.add_argument("--ingestDIR", "--ingestDir", help="Ingest directory path", action="store", dest="ingestDir", required=True)
 
     # Parse arguments
     args = parser.parse_args()
