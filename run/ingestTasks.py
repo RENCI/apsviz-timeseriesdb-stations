@@ -13,6 +13,7 @@ import argparse
 import glob
 import os
 import sys
+import shutil
 import psycopg
 import pandas as pd
 from pathlib import Path
@@ -28,7 +29,11 @@ def ingestStations(ingestDir):
         Returns 
             None
     '''         
-            
+
+    # Move station meta files to the /data/DataIngesting/DAILY_INGEST/
+    logger.info('Copy stations directory to '+ingestDir)
+    shutil.copytree('/home/nru/stations', ingestDir+'stations', dirs_exist_ok=True)
+
     # Create list of geom files, to be ingested by searching the input directory for geom files.
     inputFiles = glob.glob(ingestDir+"stations/geom_*.csv")
             
