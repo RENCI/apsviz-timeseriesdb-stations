@@ -3,15 +3,14 @@
 
 # Import python modules
 import argparse
-import glob
+import psycopg
 import sys
 import os
-import psycopg
+import glob
 import pandas as pd
-import subprocess
 from loguru import logger
 
-def getSourceObsMetaLocationType(inputLocationType):
+def getSourceModelMetaLocationType(inputLocationType):
     ''' Returns DataFrame containing source meta-data queried from the drf_source_obs_meta table.
         Parameters
             inputLocationType: string
@@ -30,13 +29,14 @@ def getSourceObsMetaLocationType(inputLocationType):
         cur = conn.cursor()
 
         # Run query
-        cur.execute("""SELECT data_source, source_name, source_archive, source_variable, filename_prefix, location_type, units
-                       FROM drf_source_obs_meta WHERE location_type =  %(locationtype)s
+        cur.execute("""SELECT data_source, source_name, source_archive, source_variable, source_instance, forcing_metclass, filename_prefix, location_type, units
+                       FROM drf_source_model_meta WHERE location_type =  %(locationtype)s
                        ORDER BY filename_prefix""",
                     {'locationtype': inputLocationType})
 
         # convert query output to Pandas dataframe
-        df = pd.DataFrame(cur.fetchall(), columns=['data_source', 'source_name', 'source_archive', 'source_variable', 'filename_prefix', 'location_type', 'units'])
+        df = pd.DataFrame(cur.fetchall(), columns=['data_source', 'source_name', 'source_archive', 'source_variable', 'source_instance', 'forcing_metclass', 
+                                                   'filename_prefix', 'location_type', 'units'])
 
         # Close cursor and database connection
         cur.close()
@@ -88,21 +88,25 @@ def getStationID(stationNameList):
     except (Exception, psycopg.DatabaseError) as error:
         logger.exception(error)
 
-def addMeta(ingestDir,inputFilePath, inputDataSource, inputSourceName, inputSourceArchive, inputUnits, inputLocationType):
+def addMeta(ingestPath, inputFilePath, inputDataSource, inputSourceName, inputSourceArchive, inputSourceInstance, inputForcingMetclass, inputUnits, inputLocationType):
     ''' Returns a CSV file that containes source information specific to station IDs that have been extracted from the drf_gauge_station table.
         The function adds additional source information (data source, source name, source archive, data units) to the station IDs. This 
-        information is latter ingested into table drf_gauge_source by running the ingestObsSourceData() function in ingetTask.py
+        information is latter ingested into table drf_model_source by running the ingestModelSourceData() function in ingetTask.py
         Parameters
-            ingestDir: string
-                 Directory path to the ast-run-ingester directory
+            ingestPath: string
+                Directory path to ingest data files, created from the harvest files, modelRunID subdirectory is included in this path
             inputFilePath: string
                 The geom file path and name
             inputDataSource: string
-                Unique identifier of data source (e.g., river_gauge, tidal_predictions, air_barameter, wind_anemometer...)
+                Unique identifier of data source (e.g., river_gauge, tidal_predictions, air_barameter, wind_anemometer, NAMFORECAST_NCSC_SAB_V1.23...)
             inputSourceName: string
-                Organization that owns original source data (e.g., ncem, ndbc, noaa...)
+                Organization that owns original source data (e.g., ncem, ndbc, noaa, adcirc...)
             inputSourceArchive: string
-                Where the original data source is archived (e.g., contrails, ndbc, noaa...)
+                Where the original data source is archived (e.g., contrails, ndbc, noaa, renci...)
+            inputSourceInstance: string
+                Source instance, such as ncsc123_gfs_sb55.01. Used by ingestSourceMeta, and ingestData.
+            inputForcingMetclass: string
+                ADCIRC model forcing class, such as synoptic or tropical. Used by ingestSourceMeta, and ingestData.
             inputUnits: string
                 Units of data (e.g., m (meters), m^3ps (meter cubed per second), mps (meters per second), and mb (millibars)
             inputLocationType: string
@@ -120,20 +124,22 @@ def addMeta(ingestDir,inputFilePath, inputDataSource, inputSourceName, inputSour
     df['data_source'] = inputDataSource
     df['source_name'] = inputSourceName
     df['source_archive'] = inputSourceArchive
+    df['source_instance'] = inputSourceInstance
+    df['forcing_metclass'] = inputForcingMetclass
     df['units'] = inputUnits
 
     # Drop station_name from DataFrame 
     df.drop(columns=['station_name'], inplace=True)
 
     # Reorder column name and update indeces 
-    newColsOrder = ['station_id','data_source','source_name','source_archive','units']
+    newColsOrder = ['station_id','data_source','source_name','source_archive','source_instance','forcing_metclass','units']
     df=df.reindex(columns=newColsOrder)
 
     # Write dataframe to csv file 
     outputFile = 'source_'+inputSourceName+'_stationdata_'+inputSourceArchive+'_'+inputLocationType+'_'+inputDataSource+'_meta.csv'
-    df.to_csv(ingestDir+outputFile, index=False, header=False)
+    df.to_csv(ingestPath+outputFile, index=False, header=False)
 
-def runIngestObsSourceData(ingestDir, inputLocationType):
+def runIngestModelSourceData(ingestDir, inputLocationType):
     ''' This function runs createIngestObsSourceMeta.py which creates source data files that are then ingested into the drf_gauge_source
         table, in the database, by running ingestObsTasks.py using --inputTask ingestObsSourceData.
         Parameters
@@ -147,21 +153,23 @@ def runIngestObsSourceData(ingestDir, inputLocationType):
     '''
  
     # get source meta
-    df = getSourceObsMetaLocationType(inputLocationType)
+    df = getSourceModelMetaLocationType(inputLocationType)
 
    # get geom file
     inputFile = glob.glob(ingestDir+"stations/geom_*.csv")
 
     # run addmMeta for the sources from getSourceObsMetaLocationType
     for index, row in df.iterrows():
-        addMeta(ingestDir, inputFile[0], row['data_source'], row['source_name'], row['source_archive'], row['units'], row['location_type'])
+        # ingestPath, inputFilePath, inputDataSource, inputSourceName, inputSourceArchive, inputSourceInstance, inputForcingMetclass, inputUnits, inputLocationType
+        addMeta(ingestDir, inputFile[0], row['data_source'], row['source_name'], row['source_archive'], row['source_instance'], row['forcing_metclass'], 
+                row['units'], row['location_type'])
 
     # remove geom file
     os.remove(inputFile[0])
 
     # Create list of program commands
     program_list = []
-    program_list.append(['python','ingestTasks.py','--ingestDir',ingestDir,'--inputTask','ingestObsSourceData'])
+    program_list.append(['python','ingestTasks.py','--ingestDir',ingestDir,'--inputTask','ingestModelSourceData'])
 
     # Run list of program commands using subprocess
     for program in program_list:
@@ -169,26 +177,27 @@ def runIngestObsSourceData(ingestDir, inputLocationType):
         output = subprocess.run(program, shell=False, check=True)
         logger.info('Ran '+" ".join(program)+" with output returncode "+str(output.returncode))
 
-# Main program function takes args as input, which contains the ingestDir, and outputFile values.
+# Main program function takes args as input, which contains the ingestPath, and outputFile values.
 @logger.catch
 def main(args):
     ''' Main program function takes args as input, starts logger, runs addMeta(), which writes output to CSV file.
-        The CSV file will be ingest into table drf_gauge_source when ingestObsSourceData() function is run in ingestObsTask.py
-        Parameters
-            args: dictionary
-                contains the parameters listed below
-            ingestDir: string
-                Directory path to the ast-run-ingester directory
-            inputLocationType: string
-                gauge location type (COASTAL, TIDAL, or RIVERS)
-        Returns
-            CSV file
+         The CSV file will be ingest into table drf_gauge_source when ingestObsSourceData() function is run in ingestObsTask.py
+         Parameters
+             args: dictionary
+                 contains the parameters listed below
+             ingestDir: string
+                 Directory path to the ast-run-ingester directory
+             inputLocationType: string
+                 gauge location type (COASTAL, TIDAL, or RIVERS)
+         Returns
+             CSV file
     '''
 
     # Add logger
+
     logger.remove()
     log_path = os.path.join(os.getenv('LOG_PATH', os.path.join(os.path.dirname(__file__), 'logs')), '')
-    logger.add(log_path+'createIngestNewObsSourceMeta.log', level='DEBUG')
+    logger.add(log_path+'createIngestNewModelSourceMeta.log', level='DEBUG')
     logger.add(sys.stdout, level="DEBUG")
     logger.add(sys.stderr, level="ERROR")
 
@@ -199,10 +208,10 @@ def main(args):
     logger.info('Start processing source data for location type '+inputLocationType+'.')
 
     # Run addMeta function
-    runIngestObsSourceData(ingestDir, inputLocationType)
+    runIngestModelSourceData(ingestDir, inputLocationType)
     logger.info('Finished processing location type '+inputLocationType+'.')
 
-# Run main function takes ingestDir, and outputFile as input.
+# Run main function takes ingestPath, and outputFile as input.
 if __name__ == "__main__":
     ''' Takes argparse inputs and passes theme to the main function
         Parameters
@@ -212,7 +221,7 @@ if __name__ == "__main__":
                 Gauge location type (COASTAL, TIDAL, or RIVERS)
         Returns
             None
-    '''         
+    '''     
 
     parser = argparse.ArgumentParser()
 
