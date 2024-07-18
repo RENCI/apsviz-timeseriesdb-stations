@@ -7,6 +7,7 @@ import psycopg
 import sys
 import os
 import glob
+import subprocess
 import pandas as pd
 from loguru import logger
 
