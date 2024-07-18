@@ -117,6 +117,7 @@ def addMeta(ingestPath, inputFilePath, inputDataSource, inputSourceName, inputSo
 
     # Add station csv file as input and change this to read station csv file
     # Create list of geom files, to be ingested by searching the input directory for geom files.
+
     df = pd.read_csv(inputFilePath, usecols=[0], names=['station_name'])
     stationNameList = [format(x, 'd') for x in list(df['station_name'].values)]
     df = getStationID(stationNameList)
@@ -136,7 +137,7 @@ def addMeta(ingestPath, inputFilePath, inputDataSource, inputSourceName, inputSo
     df=df.reindex(columns=newColsOrder)
 
     # Write dataframe to csv file 
-    outputFile = 'source_'+inputSourceName+'_stationdata_'+inputSourceArchive+'_'+inputLocationType+'_'+inputDataSource+'_meta.csv'
+    outputFile = 'source_'+inputSourceName+'_stationdata_'+inputSourceArchive+'_'+inputLocationType+'_'+inputDataSource+'_'+inputSourceInstance+'_meta.csv'
     df.to_csv(ingestPath+outputFile, index=False, header=False)
 
 def runIngestModelSourceData(ingestDir, inputLocationType):
@@ -156,16 +157,13 @@ def runIngestModelSourceData(ingestDir, inputLocationType):
     df = getSourceModelMetaLocationType(inputLocationType)
 
    # get geom file
-    inputFile = glob.glob(ingestDir+"stations/geom_*.csv")
+    inputFile = glob.glob("stations/geom_*.csv")
 
     # run addmMeta for the sources from getSourceObsMetaLocationType
     for index, row in df.iterrows():
         # ingestPath, inputFilePath, inputDataSource, inputSourceName, inputSourceArchive, inputSourceInstance, inputForcingMetclass, inputUnits, inputLocationType
         addMeta(ingestDir, inputFile[0], row['data_source'], row['source_name'], row['source_archive'], row['source_instance'], row['forcing_metclass'], 
                 row['units'], row['location_type'])
-
-    # remove geom file
-    os.remove(inputFile[0])
 
     # Create list of program commands
     program_list = []

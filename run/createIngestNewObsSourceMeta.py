@@ -150,14 +150,11 @@ def runIngestObsSourceData(ingestDir, inputLocationType):
     df = getSourceObsMetaLocationType(inputLocationType)
 
    # get geom file
-    inputFile = glob.glob(ingestDir+"stations/geom_*.csv")
+    inputFile = glob.glob("stations/geom_*.csv")
 
     # run addmMeta for the sources from getSourceObsMetaLocationType
     for index, row in df.iterrows():
         addMeta(ingestDir, inputFile[0], row['data_source'], row['source_name'], row['source_archive'], row['units'], row['location_type'])
-
-    # remove geom file
-    os.remove(inputFile[0])
 
     # Create list of program commands
     program_list = []
