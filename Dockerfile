@@ -48,7 +48,7 @@ FROM python:3.9-slim
 RUN apt-get update
 
 # install basic apps
-Run apt-get install -qy vim cron
+RUN apt-get install -qy vim cron
 
 # clear out the apt cache
 RUN apt-get clean
@@ -69,7 +69,7 @@ ENV PATH /venv/bin:$PATH
 
 # copy python and bin files to container
 COPY run/*.py ./
-COPY run/env .env
+COPY stations/*.csv ./stations/
 
 # set the python path
 ENV PYTHONPATH=/home/nru
