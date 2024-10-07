@@ -7,121 +7,94 @@ SPDX-License-Identifier: MIT
 -->
 
 # apsviz-timeseriesdb-stations 
-The software, in this repo, is used to ingest gauge station data from NOAA, NCEM, NDBC, and ADICIRC. To begin ingesting station data, you first need to install the apsviz-timeseriesdb repo which can bet downloaded from:  
+The software, in this repo, is used to ingest gauge station data from NOAA, NCEM, NDBC, and ADICIRC into the apsviz-timeseriesdb. The the repo for the apsviz-timeseriesdb is at:  
 
 https://github.com/RENCI/apsviz-timeseriesdb  
 
-Follow the installation instructions for that repo. It creates and postgesql database, that serves data using a Django Rest Framework (DRF) app. 
+## Create Geom file
 
-The gauge data that is being ingested can currently be accessed from the apsviz-timeseriesdb.edc.renci.org VM in the following directory:   
+To ingest a new station the first thing that needs to be done is to create a geom file containing the station meta-data and add it to the station directory in this repo:  
 
-/projects/ees/TDS/DataHarvesting/DAILY_HARVESTING/ 
+apsviz-timeseriesdb-stations/stations  
 
-It was generated using the software in the ADCIRC Support Tools (AST) repo, which can be downloaded from:  
+The file needs to begin with geom for example for a NOAA station the file name would be:  
 
-https://github.com/RENCI/AST
+geom_noaa_stations.csv  
 
-## Install apsviz-timeseriesdb-stations
+The file needs to contain the following data:  
 
-To install apsviz-timeseriesdb-stations you first need to clone it:
+8725114,26.1366666667,-81.7883333333,gmt,NOAA/NOS,Naples Bay,tidal,us,fl,Collier,0101000020E6100000B137A70D747254C009EE2F96FC223A40  
 
-git clone https://github.com/RENCI/apsviz-timeseriesdb-stations.git
+Where the columns above are:  
 
-Next edit the run/env file adding a password to the line:
+station_name: 8725114  
+lat: 26.1366666667  
+lon: -81.7883333333  
+tz: gmt  
+gauge_owner: NOAA/NOS  
+location_name: Naples Bay  
+location_type: tidal  
+country: us  
+state: fl  
+county: Collier  
+geom: 0101000020E6100000B137A70D747254C009EE2F96FC223A40  
 
-SQL_PASSWORD=xxxxxx
+This file needs to be created before you build the Docker image and create the Docker container.  The data in this file will be ingested into the drf_gauge_station data, which is described in the "Ingest New Station into Database" section of this document.  
 
-where you change xxxxxx to the password that is used to access the database in apsviz-timeseriesdb.
+## Install apsviz-timeseriesdb-stations  
 
-Then change your directory to apsviz-timeseriesdb-stations/build:
+To install apsviz-timeseriesdb-stations you first need to clone it:  
 
-cd apsviz-timeseriesdb-stations/build
+git clone https://github.com/RENCI/apsviz-timeseriesdb-stations.git  
 
-From this directory you can run the build.sh file as follows:
+Then change your directory to apsviz-timeseriesdb-stations/build:  
 
-./build.sh latest
+cd apsviz-timeseriesdb-stations/build  
 
-After the build has finished edit the createcontainer.sh file, adding the directory path you want to add as a volume:
+From this directory you can run the build.sh file as follows:  
+
+./build.sh latest  
+
+After the build has finished edit the createcontainer.sh file, adding the directory path you want to add as a volume:  
 
 \#!/bin/bash  
-\# setup specific to apsviz_timeseriesdb_stations 
-version=$1; 
+\# setup specific to apsviz_timeseriesdb_stations   
+version=$1;   
 
 docker run -ti --name apsviz_timeseriesdb_stations_$version \\  
   --volume /xxxx/xxxx/xxxx:/data \\  
-  -d apsviz_timeseriesdb_stations:$version /bin/bash 
+  -d apsviz_timeseriesdb_stations:$version /bin/bash  
 
-The xxxx represent directories in your directory path, so replace them with the actual directory names. The directory you add as a volume should have enough storage space to do the job. After editing createcontainer.sh run it:
+The xxxx represent directories in your directory path, so replace them with the actual directory names. The directory you add as a volume should have enough storage space to do the job. After editing createcontainer.sh run it:  
 
-createcontainer.sh latest
+createcontainer.sh latest  
 
-The value 'latest' in the above commands is the version of the docker image and container you are creating. You can use values other than 'latest', but make sure you use the same values in all the commands.
+The value 'latest' in the above commands is the version of the docker image and container you are creating. You can use values other than 'latest', but make sure you use the same values in all the commands.  
 
-The next step is to make a network link to apsviz-timeseriesdb_default. This step will enable you to access the apsviz-timeseriesdb database. Before taking this step you have to install apsviz-timeseriesdb. If you have not install apsviz-timeseriesdb go to the following URL for instructions:
+The next step is to make a network link to apsviz-timeseriesdb_default. This step will enable you to access the apsviz-timeseriesdb database. Before taking this step you have to install apsviz-timeseriesdb. If you have not install apsviz-timeseriesdb go to the following URL for instructions:  
 
-https://github.com/RENCI/apsviz-timeseriesdb
+https://github.com/RENCI/apsviz-timeseriesdb  
 
-To create the network link run the createnetwork.sh file as follows:
+To create the network link run the createnetwork.sh file as follows:  
 
-./createnetwork.sh latest
+./createnetwork.sh latest  
 
-## Ingest original station data
+## Ingest New Station into Database
 
-In the next step the original station data is ingested into the database. This data was obtained directly from NOAA, NDBC and NCEM, and is used to generate the stations data that will be ingested into the drf_gauge_station table, which is described further down in this README.md.
+Before ingesting new station data make sure you have created a geom that contains the station(s) meta-data as described in section "Create Geom file" of this document.  
 
-To ingest the original stations data change your directory to:
+To ingest a new station(s) there are three steps. First the station(s) meta-data needs to be ingested into the drf_gauge_station table. Then the Observation source information for the new station(s) needs to be ingested into the drf_gauge_source table. Finally, the Model source information for the new station(s) needs to be ingested into the drf_model_source table.  
 
-cd original_gauge_ingest
+To ingest the station data into the drf_gauge_station table run the following command:  
 
-Create a file named .env.db in this directory, with the following information:
+python ingestTasks.py --ingestDir /data/ast-run-ingester/ --inputTask ingestStations  
 
-POSTGRES_USER=apsviz_gauges
-POSTGRES_PASSWORD=xxxxxx
-POSTGRES_DB=apsviz_gauges
+To ingest the Observation source data into the drf_gauge_source table run the following command:  
 
-where you change xxxxxx to the password that is used to access the database in apsviz-timeseriesdb.
+python createIngestNewObsSourceMeta.py --ingestDir /data/ast-run-ingester/ --inputLocationType tidal  
 
-Then copy the CSV files to container:
+To ingest the Model source data into the drf_model_source table run the following command:  
 
-./docker_cp_csv.sh
+python createIngestNewModelSourceMeta.py --ingestDir /data/ast-run-ingester/ --inputLocationType tidal  
 
-Then create original station tables by running:
-
-./psql_original_gauge_create.sh
-
-Finally ingest original station data by running:
-
-./psql_original_gauge_ingest.sh
-
-## Ingest Data into Database
-
-At this point things are installed, and you can access the apsviz_timeseriesdb_ingest container shell using the root_shell.sh file as follows:
-
-./root_shell.sh latest
- 
-The first step is to make sure you have created a directory to store the files that you are going to be creating. From within the apsviz_timeseriesdb_ingest shell make the following directories:
-
-mkdir -p /data/DataIngesting/DAILY_INGEST
-
-If you are running on you local machine also make sure you have downloaded the harvest files from the directory:
-
-/projects/ees/TDS/DataHarvesting/DAILY_HARVESTING/
-
-on the apsviz-timeseriesdb.edc.renci.org VM, to the same location that you added as a volume when create the container, so that when you are in the container the following directory exits:
-
-/data/DataIngesting/DAILY_HARVESTING/
-
-### Create and Ingest Station Data 
-
-To ingest the station data, first make sure you have already ingested the original station data, as describe above in this README.md. You also need to have installed the apsviz-timeseriesdb repo:
-
-https://github.com/RENCI/apsviz-timeseriesdb
-
-To create the station meta data that will be ingested into the drf_gauge_station table, in the apsviz-timeseriesdb database, run the following command in the /home/nru directory:
-
-python runIngest.py --outputDir /data/DataIngesting/DAILY_INGEST --inputTask CreateStations
-
-This will create Station data files in /data/DataIngesting/DAILY_INGEST. The next step is to ingest them into the drf_gauge_station table in the apsviz-timeseriesdb database. To do this run the following command in the /home/nru directory:
-
-python runIngest.py --inputDIR /data/DataIngesting/DAILY_INGEST --ingestDir /home/DataIngesting/DAILY_INGEST --inputTask IngestStations
 
